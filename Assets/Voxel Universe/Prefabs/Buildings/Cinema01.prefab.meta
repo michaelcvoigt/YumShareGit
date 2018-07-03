@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: 631431495364748b18deb7698ac5c128
+labels:
+- Architecture
+- Building
+- Cinema
+- Color
+- Garden
+- Movies
+- Tickets
+- Urban
+timeCreated: 1491666843
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

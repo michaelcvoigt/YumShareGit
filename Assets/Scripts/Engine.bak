@@ -1,0 +1,406 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.XR.iOS;
+using System.Linq;
+using UnityEngine.SceneManagement;
+
+public class Engine : MonoBehaviour
+{
+    public UnityARVideo MyUnityARVideo;
+    public GameObject ThreeDCursor;
+    public Text Message;
+    public Text Logger;
+    public GameObject ScreenBlocker;
+    public GameObject BottomButtons;
+    public GameObject test;
+    public MalbersAnimations.Selector.SelectorController MySelectorController;
+    public GameObject PartSelector;
+    public GameObject Items;
+    public MalbersAnimations.Selector.SelectorEditor MySelector;
+    public GameObject SelectedMesh;
+    public float MinScale = 0.15f;
+    public float MaxScale = 3.00f;
+    public float SelectionButtonScale = 175.0f;
+
+    //private 
+    private float PenDistance = 1.0f;
+    private string updateMessage = "";
+    private GameObject[] partListArray;
+    private List<GameObject> partList;
+    private GameObject[] floatingListArray;
+    private List<GameObject> floatingList;
+    private GameObject[] objectListArray;
+    private List<GameObject> objectList;
+    private GameObject MovingGroundObject;
+    private GameObject MovingFloatObject;
+    private GameObject SelectionMesh;
+    private bool mySelectorOpen = false;
+    private bool touchedScreen = false;
+    private float PrevDisV;
+    private float PrevScaleV;
+    private List<GameObject> undoObjects;
+    private ARPoint point;
+    private Vector3 position;
+    private float maxRayDistance = 30.0f;
+    private LayerMask collisionLayer = 1 << 10;  //ARKitPlane layer
+    private List<ARHitTestResult> hitResults;
+    public static Engine instance
+    {
+        get
+        {
+            return instance;
+        }
+    }
+
+    // Use this for initialization
+    void Start()
+    {
+        UnityARSessionNativeInterface.ARFrameUpdatedEvent += ARFrameUpdated;
+
+        Message.text = "Look around with camera.\r\nTap to add stuff.";
+
+        undoObjects = new List<GameObject>();
+        PartSelector.SetActive(false);
+
+        floatingListArray = Resources.LoadAll<GameObject>("Floating");
+        floatingList = floatingListArray.ToList();
+
+        // set selected item to first
+
+        Destroy(SelectionMesh);
+        SelectionMesh = Instantiate(floatingList[1], new Vector3(0, 0, 0), Quaternion.identity);
+        SelectionMesh.transform.parent = SelectedMesh.transform;
+        SelectionMesh.transform.localScale = new Vector3(SelectionButtonScale, SelectionButtonScale, SelectionButtonScale);
+        SelectionMesh.transform.localPosition = new Vector3(0, 0, 0);
+        SelectionMesh.SetLayer(5, true);
+
+        foreach (GameObject item in floatingListArray)
+        {
+            GameObject NewObject = Instantiate(item, new Vector3(0, 0, 0), Quaternion.identity);
+            NewObject.transform.parent = Items.transform;
+            NewObject.transform.localScale = new Vector3(4.25f, 4.25f, 4.25f);
+
+            foreach (Animation animation in NewObject.GetComponentsInChildren(typeof(Animation)))
+            {
+                animation.playAutomatically = false;
+            }
+
+            foreach (MonoBehaviour monoBehaviour in NewObject.GetComponentsInChildren(typeof(MonoBehaviour)))
+            {
+                monoBehaviour.enabled = false;
+            }
+
+            MySelector.UpdateItemsList();
+
+            MalbersAnimations.Selector.MItem NewMItem = NewObject.GetComponent<MalbersAnimations.Selector.MItem>();
+
+            NewMItem.originalItem = item;
+
+            // set selected item to the first one 
+            if (!MySelectorController.SelectedGameObject)
+            {
+
+                MySelectorController.SelectedGameObject = NewMItem.originalItem;
+            }
+        }
+    }
+    public void SetSelection()
+    {
+        PartSelector.SetActive(false);
+        mySelectorOpen = false;
+        BottomButtons.SetActive(true);
+
+        if (MySelectorController.SelectedGameObject)
+        {
+            Destroy(SelectionMesh);
+
+            SelectionMesh = Instantiate(MySelectorController.SelectedGameObject, new Vector3(0, 0, 0), Quaternion.identity);
+
+            SelectionMesh.transform.parent = SelectedMesh.transform;
+            SelectionMesh.transform.localScale = new Vector3(SelectionButtonScale, SelectionButtonScale, SelectionButtonScale);
+            SelectionMesh.transform.localPosition = new Vector3(0, 0, 0);
+            SelectionMesh.SetLayer(5, true);
+        }
+    }
+
+    public void ShowSelector()
+    {
+        if (mySelectorOpen)
+        {
+            PartSelector.SetActive(false);
+            mySelectorOpen = false;
+            BottomButtons.SetActive(true);
+        }
+        else
+        {
+            PartSelector.SetActive(true);
+            mySelectorOpen = true;
+            BottomButtons.SetActive(false);
+        }
+    }
+
+    public void MoveObject(Vector3 newPosition, GameObject objectToMove)
+    {
+        objectToMove.transform.localPosition = new Vector3(newPosition.x, newPosition.y, newPosition.z);
+
+    }
+
+    public void TouchedScreen(bool start)
+    {
+        Debug.Log("function called with " + start + ":" + Input.touchCount);
+        touchedScreen = start;
+    }
+
+    public static void DectectedPlane()
+    {
+        //Engine.instance.Message.text = "Tap Anywhere to start adding AR objects.";
+        //Engine.instance.ScreenBlocker.SetActive(false);
+    }
+#if UNITY
+    void Update()
+    {
+        if (Input.touchCount >= 2)
+        {
+            // Store both touches.
+            Touch touchZero = Input.GetTouch(0);
+            Touch touchOne = Input.GetTouch(1);
+
+            // Find the position in the previous frame of each touch.
+            Vector2 touchZeroPrevPos = touchZero.position - touchZero.deltaPosition;
+            Vector2 touchOnePrevPos = touchOne.position - touchOne.deltaPosition;
+
+            // Find the magnitude of the vector (the distance) between the touches in each frame.
+            float prevTouchDeltaMag = (touchZeroPrevPos - touchOnePrevPos).magnitude;
+            float touchDeltaMag = (touchZero.position - touchOne.position).magnitude;
+
+            // Find the difference in the distances between each frame.
+            float deltaMagnitudeDiff = (prevTouchDeltaMag - touchDeltaMag) * .01f;
+
+            float distanceY = touchOne.position.y - touchOne.deltaPosition.y;
+            // there are no plans to try to move the distance of the object 
+            
+            PenDistance = 1.0f + (distanceY * .001f);
+            Debug.Log("distanceY = " + distanceY + " Pen = " + PenDistance);
+        }
+
+        PenDistance = 1.0f;
+    }
+#endif
+
+    public void CheckScale(GameObject scalingObject)
+    {
+
+        if (Input.touchCount >= 2)
+        {
+            // Store both touches.
+            Touch touchZero = Input.GetTouch(0);
+            Touch touchOne = Input.GetTouch(1);
+
+            // Find the position in the previous frame of each touch.
+            Vector2 touchZeroPrevPos = touchZero.position - touchZero.deltaPosition;
+            Vector2 touchOnePrevPos = touchOne.position - touchOne.deltaPosition;
+
+            // Find the magnitude of the vector (the distance) between the touches in each frame.
+            float prevTouchDeltaMag = (touchZeroPrevPos - touchOnePrevPos).magnitude;
+            float touchDeltaMag = (touchZero.position - touchOne.position).magnitude;
+
+            // Find the difference in the distances between each frame.
+            float deltaMagnitudeDiff = (prevTouchDeltaMag - touchDeltaMag) * .01f;
+
+            float NewX = Mathf.Abs(scalingObject.transform.localScale.x - deltaMagnitudeDiff);
+            float NewY = Mathf.Abs(scalingObject.transform.localScale.y - deltaMagnitudeDiff);
+            float NewZ = Mathf.Abs(scalingObject.transform.localScale.z - deltaMagnitudeDiff);
+
+            //scale
+            Vector3 NewScale = new Vector3(Mathf.Clamp(NewX, MinScale, MaxScale), Mathf.Clamp(NewY, MinScale, MaxScale), Mathf.Clamp(NewZ, MinScale, MaxScale));
+            scalingObject.transform.localScale = NewScale;
+
+            //rotate
+            //Vector2 diff = touchOnePrevPos - touchZeroPrevPos;
+            //float angle = (Mathf.Atan2(diff.y, diff.x));
+            //scalingObject.transform.rotation = Quaternion.Euler(0f, Mathf.Rad2Deg * angle, 0f);
+
+            if (hitResults.Count == 0)
+            {
+                float distanceY = touchOne.position.y - touchOne.deltaPosition.y;
+                // there are no plans to try to move the distance of the object 
+                PenDistance = 1.0f + (distanceY * .001f);
+            }
+        }
+        else
+        {
+            PenDistance = 1.0f;
+        }
+    }
+    public void ARFrameUpdated(UnityARCamera camera)
+    {
+
+        // if two fingers scale that object
+        if (Input.touchCount >= 2 && MovingFloatObject)
+        {
+            CheckScale(MovingFloatObject);
+        }
+
+        // cast a ray to see if you tapped on an existing items, if so make that the current item to move around
+        if (Input.touchCount > 0 && touchedScreen && !mySelectorOpen && MovingFloatObject == null)
+        {
+
+            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+            RaycastHit hit;
+
+            if (Physics.Raycast(ray, out hit, maxRayDistance))
+            {
+
+                if (hit.collider.name != "plane" && hit.collider.name != "Plane")
+                {
+                    MovingFloatObject = hit.transform.gameObject;
+                    return;
+                }
+
+            }
+
+        }
+
+        // didn't tap on anything
+        // the touch code to create and move that object
+        if (Input.touchCount > 0 && touchedScreen && !mySelectorOpen)
+        {
+            var touch = Input.GetTouch(0);
+            //var touchFinger2 = Input.GetTouch(1);
+
+            var screenPosition = Camera.main.ScreenToViewportPoint(touch.position);
+            point = new ARPoint
+            {
+                x = screenPosition.x,
+                y = screenPosition.y
+            };
+
+            hitResults = UnityARSessionNativeInterface.GetARSessionNativeInterface().HitTest(point,
+                ARHitTestResultType.ARHitTestResultTypeExistingPlaneUsingExtent);
+
+            if (hitResults.Count > 0)
+            {
+                // ar kit detected a plane
+                ScreenBlocker.SetActive(false);
+                Message.text = "";
+
+                foreach (var hitResult in hitResults)
+                {
+                    position = UnityARMatrixOps.GetPosition(hitResult.worldTransform);
+                    break;
+                }
+
+                if (MovingFloatObject == null)
+                {
+                    // create the object, there isn't one 
+                    ThreeDCursor.SetActive(true);
+                    AddFloatObject(position);
+                    MoveObject(position, ThreeDCursor);
+                    Message.text = "";
+
+                }
+                else
+                {
+                    // there is an object, so move that around 
+                    MoveObject(position, MovingFloatObject);
+                    MoveObject(position, ThreeDCursor);
+                }
+                ScreenBlocker.SetActive(false);
+                Message.text = "";
+            }
+            else
+            {
+                // no ground plane so add float object
+                Matrix4x4 matrix = new Matrix4x4();
+                matrix.SetColumn(3, camera.worldTransform.column3);
+                position = UnityARMatrixOps.GetPosition(matrix) + (Camera.main.transform.forward * PenDistance);
+
+                // add touch position
+                Touch touchZero = Input.GetTouch(0);
+                position = new Vector3 ( position.x + ( touchZero.deltaPosition.y * .001f )  , position.y + (touchZero.deltaPosition.y * .001f)  , position.z );
+
+                if (MovingFloatObject == null)
+                {
+                    // create the object, there isn't one 
+                    ThreeDCursor.SetActive(true);
+                    AddFloatObject(position);
+                    MoveObject(position, ThreeDCursor);
+                    Message.text = "";
+
+                }
+                else
+                {
+                    // there is an object, so move that around 
+                    MoveObject(position, MovingFloatObject);
+                    MoveObject(position, ThreeDCursor);
+                }
+
+            }
+        }
+        else
+        {
+            // catch when the fingers aren't down but still dragging sucker, set final placement
+
+            if (MovingFloatObject != null)
+            {
+                // place it on the ground plane
+                MoveObject(position, MovingFloatObject);
+                MoveObject(position, ThreeDCursor);
+                MovingFloatObject = null;
+                ThreeDCursor.SetActive(false);
+                PenDistance = 1.0f;
+            }
+        }
+        Logger.text = updateMessage;
+    }
+
+    public void AddFloatObject(Vector3 currentPositon)
+    {
+        // clear message after adding first part
+        Message.text = "";
+
+        GameObject partToBuild;
+
+        if (MySelectorController.SelectedGameObject)
+        {
+            partToBuild = MySelectorController.SelectedGameObject;
+
+            GameObject NewObject = Instantiate(partToBuild, new Vector3(0, 0, 0), Quaternion.identity);
+            NewObject.transform.localPosition = new Vector3(currentPositon.x, currentPositon.y, currentPositon.z);
+            NewObject.transform.localScale = new Vector3(.5f, .5f, .5f);
+            MovingFloatObject = NewObject;
+            undoObjects.Add(NewObject);
+        }
+    }
+    public void Undo()
+    {
+
+        Debug.Log("Undo Pressed");
+        if (undoObjects.Count > 0)
+        {
+            Destroy(undoObjects[undoObjects.Count - 1]);
+            undoObjects.RemoveAt(undoObjects.Count - 1);
+        }
+
+    }
+
+    public void DeleteAll()
+    {
+        Debug.Log("DeleteAll Pressed");
+
+
+        for (int count = 0; count < undoObjects.Count; count++)
+        {
+            Destroy(undoObjects[count]);
+        }
+        undoObjects.Clear();
+
+        //updateMessage = "Count :"+undoObjects.Count;
+    }
+    public void GetHelp(){
+        SceneManager.LoadScene(0);
+    }
+
+}

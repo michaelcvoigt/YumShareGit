@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: 4629810b11b1a42749f9ac8be4517d6d
+labels:
+- Architecture
+- Building
+- Clinic
+- Emergency
+- Garden
+- Glass
+- Hospital
+- Urban
+timeCreated: 1491888445
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

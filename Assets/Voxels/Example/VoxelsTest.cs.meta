@@ -1,0 +1,25 @@
+fileFormatVersion: 2
+guid: 94dcc0a28d6485a4d8455ce054ef7608
+labels:
+- GFX
+- Effect
+- Blocks
+- 3D
+- ParticleSystem
+- Particle
+- Mesh
+- Conversion
+- Lightrock
+- Lightrocker
+- Voxels
+- Voxel
+timeCreated: 1442213045
+licenseType: Store
+MonoImporter:
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

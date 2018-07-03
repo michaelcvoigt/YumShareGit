@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: a671b1cebd9504bff92f04d9a9d6d37d
+labels:
+- Airport
+- Architecture
+- Building
+- Hangar
+- Metal
+- Plane
+- Urban
+timeCreated: 1491881721
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
